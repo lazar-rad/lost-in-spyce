@@ -1,6 +1,7 @@
 import random
 import os
 from datetime import datetime
+import math
 
 from tree_node import *
 
@@ -92,12 +93,20 @@ class Red(Algorithm):
 class Black(Algorithm):
     def __init__(self):
         super().__init__()
+        self.best_cost = {}
         self.suffix_template = "[$c]"
         self.msg = "I am Black and I use Branch-and-bound!"
 
-    def update_nodes_to_expand(self, exp_tree_node):
-        self.nodes_to_expand += exp_tree_node.children
-        self.nodes_to_expand.sort(key = lambda node: (node.get_path_cost(), node.action[0], action_direction(node.action)))
+    def update_nodes_to_expand(self, exp_node):
+        for ch in exp_node.children:
+            ch.sorting_tuple = (ch.get_path_cost(), ch.action[0], action_direction(ch.action))
+        self.nodes_to_expand += exp_node.children
+        self.nodes_to_expand.sort(key = lambda node: node.sorting_tuple)
+#        self.nodes_to_expand.sort(key = lambda node: (node.get_path_cost(), node.action[0], action_direction(node.action)))
+        self.best_cost[exp_node.state.spaceships] = exp_node.get_path_cost()
+
+    def worth_expanding(self, tree_node):
+        return tree_node.get_path_cost() <= self.best_cost.get(tree_node.state.spaceships, math.inf)
 
         
 class White(Algorithm):

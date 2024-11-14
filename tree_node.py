@@ -86,6 +86,8 @@ class TreeNode:
         self.children = []
         self.parent = None
         self.expansion_order = 0
+        self.path_cost = None
+        self.sorting_tuple = None
     
     def add_child(self, tree_node):
         if (not tree_node.parent) and not (tree_node in self.children):
@@ -99,14 +101,16 @@ class TreeNode:
             return []
 
     def get_path_cost(self):
-        if self.parent:
-            return self.parent.get_path_cost() + State.get_action_cost(self.action)
-        else:
-            return 0
+        if self.path_cost == None:
+            if self.parent:
+                self.path_cost = self.parent.get_path_cost() + State.get_action_cost(self.action)
+            else:
+                self.path_cost = 0
+        return self.path_cost
 
-    def get_path_length(self):
+    def get_depth(self):
         if self.parent:
-            return self.parent.get_path_length() + 1
+            return self.parent.get_depth() + 1
         else:
             return 0
     
@@ -155,7 +159,7 @@ class TreeNode:
         if len(template) == 0:
             return ""
         template = template.replace('$c', f"{self.get_path_cost()}")
-        template = template.replace('$l', f"{self.get_path_length()}")
+        template = template.replace('$l', f"{self.get_depth()}")
         template = template.replace('$h', f"{TreeNode.heuristics(self.state)}")
         return ' ' + template
 
