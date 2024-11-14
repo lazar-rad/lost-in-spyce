@@ -41,44 +41,10 @@ def action_direction(act):
     else:
         return 4
 
-def default_heuristics(state):
-    return 0
 
-def coords(n):
-    b = int(math.log2(n))
-    return (int(b / config.N), b % config.N)
-
-def dist(c1, c2):
-    return int(abs(c1[0] - c2[0]) + abs(c1[1] - c2[1]))
-
-def manhattan(state):
-    goals_list = []
-    goals = state.goals
-    while goals:
-        goals_list.append(coords(goals & -goals))
-        goals &= goals - 1
-    spaceships = state.spaceships
-    h = 0
-    while spaceships:
-        s = coords(spaceships & -spaceships)
-        h_part = config.M + config.N
-        for goal in goals_list:
-            d = dist(s, goal)
-            h_part = d if d < h_part else h_part
-        h += h_part
-        spaceships &= spaceships - 1
-    return h
 
 class TreeNode:
     expanded_nodes = 0
-    lex_sort = lambda ch: ch.map_node.name
-    dist_sort = lambda ch: ch.parent.map_node.distance_to(ch.map_node)
-    children_sort_key = lex_sort
-    heuristics = default_heuristics
-
-    @staticmethod
-    def set_heuristics(heur=default_heuristics):
-        TreeNode.heuristics = heur
 
     def __init__(self, action, state):
         self.action = action
@@ -86,46 +52,41 @@ class TreeNode:
         self.children = []
         self.parent = None
         self.expansion_order = 0
-        self.path_cost = None
+        self.path_cost = 0
+        self.depth = 0
         self.sorting_tuple = None
+        self.heuristics = 0
     
     def add_child(self, tree_node):
         if (not tree_node.parent) and not (tree_node in self.children):
             self.children.append(tree_node)
             tree_node.parent = self
+            tree_node.path_cost = tree_node.parent.path_cost + State.get_action_cost(tree_node.action)
+            tree_node.depth = tree_node.parent.depth + 1
 
     def get_path(self):
-        if self.parent:
-            return self.parent.get_path() + [self.action]
-        else:
-            return []
+        path = []
+        tree_node = self
+        while tree_node.parent:
+            path = [tree_node.action] + path
+            tree_node = tree_node.parent
+        return path
 
-    def get_path_cost(self):
-        if self.path_cost == None:
-            if self.parent:
-                self.path_cost = self.parent.get_path_cost() + State.get_action_cost(self.action)
-            else:
-                self.path_cost = 0
-        return self.path_cost
-
-    def get_depth(self):
-        if self.parent:
-            return self.parent.get_depth() + 1
-        else:
-            return 0
-    
     def get_path_as_string(self):
-        if self.parent:
-            return self.parent.get_path_as_string() + " -> " + f"({self.expansion_order})"
-        else:
-            return f"({self.expansion_order})"
+        path_str = f"({self.expansion_order})"
+        tree_node = self
+        while tree_node.parent:
+            path_str = f"({tree_node.parent.expansion_order})" + " -> " + path_str
+            tree_node = tree_node.parent
+        return path_str
 
     def visited(self, state):
-        if self.state == state:
-            return True
-        if not self.parent:
-            return False
-        return self.parent.visited(state)
+        tree_node = self
+        while tree_node:
+            if tree_node.state == state:
+                return True
+            tree_node = tree_node.parent
+        return False
 
     def expand(self, check_at_gen=False):
         if self.expansion_order == 0:
@@ -150,7 +111,11 @@ class TreeNode:
         return None
 
     def __str__(self):
-        exp_ord = self.expansion_order if self.expansion_order > 0 else '_'
+        exp_ord = self.expansion_order
+        if self.expansion_order == 0:
+            exp_ord = '_'
+        elif self.expansion_order == -1:
+            exp_ord = 'x'
         act = action_repr(self.action)
         stt = f"{self.state.get_state(Spaceship.kind()):x}".zfill((config.M * config.N + 3)//4)
         return f"({exp_ord}): {act} => {stt}"
@@ -158,9 +123,9 @@ class TreeNode:
     def construct_suffix(self, template=""):
         if len(template) == 0:
             return ""
-        template = template.replace('$c', f"{self.get_path_cost()}")
-        template = template.replace('$l', f"{self.get_depth()}")
-        template = template.replace('$h', f"{TreeNode.heuristics(self.state)}")
+        template = template.replace('$c', f"{self.path_cost}")
+        template = template.replace('$l', f"{self.depth}")
+        template = template.replace('$h', f"{self.heuristics}")
         return ' ' + template
 
     def to_string(self, suffix_template="", prefix=""):

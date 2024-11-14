@@ -5,6 +5,8 @@ import math
 
 from tree_node import *
 
+
+
 class Algorithm:
     def __init__(self):
         self.nodes_to_expand = []
@@ -38,11 +40,13 @@ class Algorithm:
             ret_node = tree_node.expand(self.check_at_gen)
             if ret_node:
                 ret_node.check_as_expanded()
-            self.update_nodes_to_expand(tree_node)
+            self.update(tree_node)
             return ret_node
+        else:
+            tree_node.expansion_order = -1
         return None
 
-    def update_nodes_to_expand(self, exp_tree_node):
+    def update(self, exp_tree_node):
         pass
     
     def worth_expanding(self, tree_node):
@@ -71,13 +75,15 @@ class ExampleAlgorithm(Algorithm):
         return path
 
 
+
 class Blue(Algorithm):
     def __init__(self):
         super().__init__()
         self.msg = "I am Blue and I use DFS!"
 
-    def update_nodes_to_expand(self, exp_tree_node):
-        self.nodes_to_expand = exp_tree_node.children + self.nodes_to_expand
+    def update(self, exp_node):
+        self.nodes_to_expand = exp_node.children + self.nodes_to_expand
+
 
 
 class Red(Algorithm):
@@ -86,8 +92,9 @@ class Red(Algorithm):
         self.check_at_gen = True
         self.msg = "I am Red and I use BFS!"
 
-    def update_nodes_to_expand(self, exp_tree_node):
-        self.nodes_to_expand += exp_tree_node.children
+    def update(self, exp_node):
+        self.nodes_to_expand += exp_node.children
+
 
         
 class Black(Algorithm):
@@ -97,31 +104,58 @@ class Black(Algorithm):
         self.suffix_template = "[$c]"
         self.msg = "I am Black and I use Branch-and-bound!"
 
-    def update_nodes_to_expand(self, exp_node):
+    def update(self, exp_node):
         for ch in exp_node.children:
-            ch.sorting_tuple = (ch.get_path_cost(), ch.action[0], action_direction(ch.action))
+            ch.sorting_tuple = (ch.path_cost, ch.action[0], action_direction(ch.action))
         self.nodes_to_expand += exp_node.children
         self.nodes_to_expand.sort(key = lambda node: node.sorting_tuple)
-#        self.nodes_to_expand.sort(key = lambda node: (node.get_path_cost(), node.action[0], action_direction(node.action)))
-        self.best_cost[exp_node.state.spaceships] = exp_node.get_path_cost()
+        self.best_cost[exp_node.state.spaceships] = exp_node.path_cost
 
     def worth_expanding(self, tree_node):
-        return tree_node.get_path_cost() <= self.best_cost.get(tree_node.state.spaceships, math.inf)
+        return tree_node.path_cost <= self.best_cost.get(tree_node.state.spaceships, math.inf)
 
-        
+
+
+def coords(n):
+    b = int(math.log2(n))
+    return (int(b / config.N), b % config.N)
+
+def dist(c1, c2):
+    return int(abs(c1[0] - c2[0]) + abs(c1[1] - c2[1]))
+
 class White(Algorithm):
     def __init__(self):
         super().__init__()
+        self.best_cost = {}
         self.suffix_template = "[$c+$h]"
         self.msg = "I am White and I use A* with Manhattan heuristics!"
-        TreeNode.set_heuristics(manhattan)
 
-    def update_nodes_to_expand(self, exp_tree_node):
-        self.nodes_to_expand += exp_tree_node.children
-        self.nodes_to_expand.sort(key = lambda node: (node.get_path_cost() + TreeNode.heuristics(node.state), node.action[0], action_direction(node.action)))
+    @staticmethod
+    def manhattan(state):
+        goals_list = []
+        goals = state.goals
+        while goals:
+            goals_list.append(coords(goals & -goals))
+            goals &= goals - 1
+        spaceships = state.spaceships
+        h = 0
+        while spaceships:
+            s = coords(spaceships & -spaceships)
+            h_part = config.M + config.N
+            for goal in goals_list:
+                d = dist(s, goal)
+                h_part = d if d < h_part else h_part
+            h += h_part
+            spaceships &= spaceships - 1
+        return h
 
-#    def get_path(self, state):
-#        print("*** Testing heuristics ***")
-#        print(TreeNode.heuristics(state))
-#        print("**************************")
-#        exit()
+    def update(self, exp_node):
+        for ch in exp_node.children:
+            ch.heuristics = White.manhattan(ch.state)
+            ch.sorting_tuple = (ch.path_cost + ch.heuristics, ch.action[0], action_direction(ch.action))
+        self.nodes_to_expand += exp_node.children
+        self.nodes_to_expand.sort(key = lambda node: node.sorting_tuple)
+        self.best_cost[exp_node.state.spaceships] = exp_node.path_cost
+
+    def worth_expanding(self, tree_node):
+        return tree_node.path_cost <= self.best_cost.get(tree_node.state.spaceships, math.inf)
